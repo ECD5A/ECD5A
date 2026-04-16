@@ -1,0 +1,48 @@
+name: conway contribution grid
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * *"
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "dist/**"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: conway-contribution-grid
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Generate SVG
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/generate_life_graph.py --user "${{ github.repository_owner }}" --out-dir dist
+
+      - name: Commit generated graph
+        run: |
+          if git diff --quiet -- dist; then
+            echo "No graph changes"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist/conway-contribution-grid.svg dist/conway-contribution-grid-dark.svg
+          git commit -m "Update Conway contribution grid"
+          git push
