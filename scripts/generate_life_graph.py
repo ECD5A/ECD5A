@@ -352,7 +352,7 @@ def make_svg(
         (
             f'<text x="{svg_width - 30}" y="34" text-anchor="end" fill="{theme["muted"]}" '
             'font-family="ui-monospace, SFMono-Regular, Consolas, Liberation Mono, monospace" '
-            'font-size="12">B3/S23</text>'
+            'font-size="12">CONWAY LIFEGRID // B3/S23</text>'
         ),
     ]
 
