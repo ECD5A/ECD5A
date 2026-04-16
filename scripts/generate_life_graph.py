@@ -235,18 +235,18 @@ def inject_activity_stream(grid: list[list[int]], login: str, frame: int) -> Non
         return
 
     rng = stable_rng(login, f"edge-stream:{frame}")
-    for lane in range(2):
+    for _ in range(3):
         side = rng.choice(("left", "right"))
         y = rng.randrange(1, HEIGHT - 1)
         if side == "left":
-            cells = ((0, y), (0, y - 1), (0, y + 1), (1, y), (2, y + lane - 1))
+            cells = ((0, y), (1, y + 1), (2, y - 1), (2, y), (2, y + 1))
         else:
             cells = (
                 (WIDTH - 1, y),
-                (WIDTH - 1, y - 1),
-                (WIDTH - 1, y + 1),
-                (WIDTH - 2, y),
-                (WIDTH - 3, y + lane - 1),
+                (WIDTH - 2, y + 1),
+                (WIDTH - 3, y - 1),
+                (WIDTH - 3, y),
+                (WIDTH - 3, y + 1),
             )
 
         for x, cell_y in cells:
@@ -324,7 +324,7 @@ def make_svg(
     svg_height = 190
     x0 = (svg_width - grid_width) // 2
     y0 = 56
-    duration = "34s"
+    duration = "30s"
     title = f"{login} Conway contribution grid"
 
     lines = [
