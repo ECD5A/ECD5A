@@ -90,6 +90,9 @@ THEMES = {
         "grid": "#041007",
         "live": "#39ff14",
         "hot": "#d8ff63",
+        "deploy": "#f5f25a",
+        "cyan": "#00d1ff",
+        "pink": "#ff5c8a",
         "text": "#b9ffc7",
         "muted": "#4f8f59",
         "scanline": "#ffffff",
@@ -102,6 +105,9 @@ THEMES = {
         "grid": "#d9e6ce",
         "live": "#138a36",
         "hot": "#005f73",
+        "deploy": "#b38f00",
+        "cyan": "#0077b6",
+        "pink": "#b8325f",
         "text": "#18351e",
         "muted": "#58725c",
         "scanline": "#1a1a1a",
@@ -158,29 +164,22 @@ def fetch_calendar(login: str, token: str | None) -> dict | None:
     return user["contributionsCollection"]["contributionCalendar"]
 
 
-def seed_from_calendar(calendar: dict | None, login: str) -> tuple[list[list[int]], list[list[int]], int]:
-    grid = empty_grid()
+def counts_from_calendar(calendar: dict | None) -> tuple[list[list[int]], int]:
     counts = empty_counts()
     total = 0
 
-    if calendar:
-        total = int(calendar.get("totalContributions") or 0)
-        weeks = calendar.get("weeks", [])[-WIDTH:]
-        x_offset = WIDTH - len(weeks)
-        for x, week in enumerate(weeks, start=x_offset):
-            days = week.get("contributionDays", [])[:HEIGHT]
-            for y, day in enumerate(days):
-                count = int(day.get("contributionCount") or 0)
-                counts[y][x] = count
-                if count:
-                    grid[y][x] = 1
+    if not calendar:
+        return counts, total
 
-    live = sum(sum(row) for row in grid)
-    if live < 24:
-        stamp_name(grid, counts, login)
+    total = int(calendar.get("totalContributions") or 0)
+    weeks = calendar.get("weeks", [])[-WIDTH:]
+    x_offset = WIDTH - len(weeks)
+    for x, week in enumerate(weeks, start=x_offset):
+        days = week.get("contributionDays", [])[:HEIGHT]
+        for y, day in enumerate(days):
+            counts[y][x] = int(day.get("contributionCount") or 0)
 
-    inject_gliders(grid, counts, login, minimum=5)
-    return grid, counts, total
+    return counts, total
 
 
 def stamp_name(grid: list[list[int]], counts: list[list[int]], login: str) -> None:
@@ -257,11 +256,33 @@ def evolve(seed: list[list[int]], login: str) -> list[list[list[int]]]:
     states = [[row[:] for row in seed]]
     for frame in range(1, FRAMES):
         nxt = next_state(states[-1])
-        if sum(sum(row) for row in nxt) < 8:
+        if frame > 10 and sum(sum(row) for row in nxt) < 8:
             counts = empty_counts()
             inject_gliders(nxt, counts, f"{login}:{frame}", minimum=6)
         states.append(nxt)
     return states
+
+
+def cell_fill(theme: dict[str, str], count: int, x: int, y: int, login: str) -> str:
+    if count >= 8:
+        return theme["deploy"]
+    if count >= 4:
+        return theme["hot"]
+    if count >= 2:
+        return theme["cyan"]
+    if count == 1:
+        return theme["live"]
+
+    # Deterministic accent cells keep the board from becoming one green mass when
+    # the local preview has no GitHub token.
+    digest = hashlib.sha256(f"{login}:{x}:{y}:accent".encode("utf-8")).digest()[0]
+    if digest < 13:
+        return theme["deploy"]
+    if digest < 30:
+        return theme["cyan"]
+    if digest < 38:
+        return theme["pink"]
+    return theme["live"]
 
 
 def make_svg(
@@ -290,7 +311,7 @@ def make_svg(
         f"<title id=\"title\">{escape(title)}</title>",
         (
             f"<desc id=\"desc\">A {WIDTH} by {HEIGHT} animated Conway Game of Life grid "
-            f"seeded from GitHub contributions for {escape(login)}.</desc>"
+            f"started from the {escape(login)} mark and color-accented by GitHub contribution activity.</desc>"
         ),
         "<defs>",
         (
@@ -322,7 +343,7 @@ def make_svg(
         ),
     ]
 
-    boot_state = clean_name_grid(login)
+    boot_state = states[0]
     animation_states = [boot_state] * BOOT_HOLD_FRAMES + states
 
     for y in range(HEIGHT):
@@ -330,7 +351,7 @@ def make_svg(
             px = x0 + x * (cell + gap)
             py = y0 + y * (cell + gap)
             count = counts[y][x]
-            fill = theme["hot"] if count >= 4 else theme["live"]
+            fill = cell_fill(theme, count, x, y, login)
             values = ";".join("0.98" if state[y][x] else "0.08" for state in animation_states)
             lines.append(
                 f'<rect x="{px}" y="{py}" width="{cell}" height="{cell}" rx="2" '
@@ -347,7 +368,8 @@ def make_svg(
 
 def write_outputs(login: str, out_dir: Path, token: str | None) -> None:
     calendar = fetch_calendar(login, token)
-    seed, counts, total = seed_from_calendar(calendar, login)
+    seed = clean_name_grid(login)
+    counts, total = counts_from_calendar(calendar)
     states = evolve(seed, login)
     out_dir.mkdir(parents=True, exist_ok=True)
 

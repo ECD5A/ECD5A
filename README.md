@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="./dist/conway-contribution-grid-dark.svg" width="920" alt="Animated life grid seeded from GitHub contributions">
+  <img src="./dist/conway-contribution-grid-dark.svg" width="920" alt="Animated Conway life grid with GitHub contribution colors">
 </p>
 
 <p align="center">
