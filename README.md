@@ -22,30 +22,3 @@
   <img src="https://img.shields.io/badge/SHA--256-111111?style=flat-square&logo=gnubash&logoColor=39ff14&labelColor=050505" alt="SHA-256">
   <img src="https://img.shields.io/badge/ECC-111111?style=flat-square&logo=letsencrypt&logoColor=f5f25a&labelColor=050505" alt="ECC">
 </p>
-
-## /public-workbench
-
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <h3><a href="https://github.com/ECD5A/EllipticZero">EllipticZero</a> <sub>current lab</sub></h3>
-      <p>Local-first ECC and smart-contract audit workbench. Built for reproducible checks, agent-assisted review, and evidence that can be replayed.</p>
-      <p>
-        <img src="https://img.shields.io/github/v/release/ECD5A/EllipticZero?style=flat-square&label=release&labelColor=050505&color=39ff14" alt="EllipticZero release">
-        <img src="https://img.shields.io/github/stars/ECD5A/EllipticZero?style=flat-square&label=stars&labelColor=050505&color=f5f25a" alt="EllipticZero stars">
-        <img src="https://img.shields.io/badge/track-ECC%20audit%20lab-00d1ff?style=flat-square&labelColor=050505" alt="ECC audit lab">
-      </p>
-      <code>ECC / audit automation / local agents / reproducible reports</code>
-    </td>
-    <td width="50%" valign="top">
-      <h3><a href="https://github.com/ECD5A/ProofStampBot-OSS">ProofStampBot-OSS</a> <sub>released tool</sub></h3>
-      <p>Telegram proof bot for SHA-256 document notarization on TON. Generates receipts, payment flow, and PDF certificates for verifiable timestamps.</p>
-      <p>
-        <img src="https://img.shields.io/github/stars/ECD5A/ProofStampBot-OSS?style=flat-square&label=stars&labelColor=050505&color=39ff14" alt="ProofStampBot stars">
-        <img src="https://img.shields.io/github/forks/ECD5A/ProofStampBot-OSS?style=flat-square&label=forks&labelColor=050505&color=f5f25a" alt="ProofStampBot forks">
-        <img src="https://img.shields.io/badge/chain-TON-00d1ff?style=flat-square&labelColor=050505" alt="TON chain">
-      </p>
-      <code>TON / Telegram / SHA-256 / receipts / timestamp proofs</code>
-    </td>
-  </tr>
-</table>
