@@ -350,14 +350,9 @@ def make_svg(
         ),
         f'<rect x="12" y="12" width="{svg_width - 24}" height="{svg_height - 24}" rx="8" fill="url(#scanlines)"/>',
         (
-            f'<text x="30" y="34" fill="{theme["text"]}" '
-            'font-family="ui-monospace, SFMono-Regular, Consolas, Liberation Mono, monospace" '
-            'font-size="15">ECD5A://CONWAY LIFEGRID</text>'
-        ),
-        (
             f'<text x="{svg_width - 30}" y="34" text-anchor="end" fill="{theme["muted"]}" '
             'font-family="ui-monospace, SFMono-Regular, Consolas, Liberation Mono, monospace" '
-            'font-size="12">B3/S23 // CRYPTONATIVE</text>'
+            'font-size="12">B3/S23</text>'
         ),
     ]
 
