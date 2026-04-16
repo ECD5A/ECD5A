@@ -88,30 +88,28 @@ THEMES = {
         "panel": "#010401",
         "border": "#0b2a10",
         "grid": "#041007",
-        "live": "#39ff14",
-        "hot": "#d8ff63",
-        "deploy": "#f5f25a",
-        "cyan": "#00d1ff",
-        "pink": "#ff5c8a",
+        "level0": "#161b22",
+        "level1": "#0e4429",
+        "level2": "#006d32",
+        "level3": "#26a641",
+        "level4": "#39d353",
         "text": "#b9ffc7",
         "muted": "#4f8f59",
         "scanline": "#ffffff",
-        "glow": "#39ff14",
     },
     "light": {
         "bg": "#f7f4e8",
         "panel": "#fffdf4",
         "border": "#b8d0a8",
         "grid": "#d9e6ce",
-        "live": "#138a36",
-        "hot": "#005f73",
-        "deploy": "#b38f00",
-        "cyan": "#0077b6",
-        "pink": "#b8325f",
+        "level0": "#ebedf0",
+        "level1": "#9be9a8",
+        "level2": "#40c463",
+        "level3": "#30a14e",
+        "level4": "#216e39",
         "text": "#18351e",
         "muted": "#58725c",
         "scanline": "#1a1a1a",
-        "glow": "#138a36",
     },
 }
 
@@ -232,6 +230,30 @@ def inject_gliders(
             counts[y][x] = max(counts[y][x], 2)
 
 
+def inject_activity_stream(grid: list[list[int]], login: str, frame: int) -> None:
+    if frame < 6 or frame % 2:
+        return
+
+    rng = stable_rng(login, f"edge-stream:{frame}")
+    for lane in range(2):
+        side = rng.choice(("left", "right"))
+        y = rng.randrange(1, HEIGHT - 1)
+        if side == "left":
+            cells = ((0, y), (0, y - 1), (0, y + 1), (1, y), (2, y + lane - 1))
+        else:
+            cells = (
+                (WIDTH - 1, y),
+                (WIDTH - 1, y - 1),
+                (WIDTH - 1, y + 1),
+                (WIDTH - 2, y),
+                (WIDTH - 3, y + lane - 1),
+            )
+
+        for x, cell_y in cells:
+            if 0 <= x < WIDTH and 0 <= cell_y < HEIGHT:
+                grid[cell_y][x] = 1
+
+
 def next_state(grid: list[list[int]]) -> list[list[int]]:
     nxt = empty_grid()
     for y in range(HEIGHT):
@@ -256,6 +278,7 @@ def evolve(seed: list[list[int]], login: str) -> list[list[list[int]]]:
     states = [[row[:] for row in seed]]
     for frame in range(1, FRAMES):
         nxt = next_state(states[-1])
+        inject_activity_stream(nxt, login, frame)
         if frame > 10 and sum(sum(row) for row in nxt) < 8:
             counts = empty_counts()
             inject_gliders(nxt, counts, f"{login}:{frame}", minimum=6)
@@ -264,25 +287,25 @@ def evolve(seed: list[list[int]], login: str) -> list[list[list[int]]]:
 
 
 def cell_fill(theme: dict[str, str], count: int, x: int, y: int, login: str) -> str:
-    if count >= 8:
-        return theme["deploy"]
-    if count >= 4:
-        return theme["hot"]
+    if count >= 10:
+        return theme["level4"]
+    if count >= 5:
+        return theme["level3"]
     if count >= 2:
-        return theme["cyan"]
+        return theme["level2"]
     if count == 1:
-        return theme["live"]
+        return theme["level1"]
 
-    # Deterministic accent cells keep the board from becoming one green mass when
-    # the local preview has no GitHub token.
+    # Deterministic green levels keep the local preview from becoming one flat
+    # shade when the GitHub token is unavailable.
     digest = hashlib.sha256(f"{login}:{x}:{y}:accent".encode("utf-8")).digest()[0]
-    if digest < 13:
-        return theme["deploy"]
-    if digest < 30:
-        return theme["cyan"]
-    if digest < 38:
-        return theme["pink"]
-    return theme["live"]
+    if digest < 16:
+        return theme["level4"]
+    if digest < 48:
+        return theme["level3"]
+    if digest < 96:
+        return theme["level2"]
+    return theme["level1"]
 
 
 def make_svg(
@@ -301,7 +324,7 @@ def make_svg(
     svg_height = 190
     x0 = (svg_width - grid_width) // 2
     y0 = 56
-    duration = "40s"
+    duration = "34s"
     title = f"{login} Conway contribution grid"
 
     lines = [
@@ -311,14 +334,9 @@ def make_svg(
         f"<title id=\"title\">{escape(title)}</title>",
         (
             f"<desc id=\"desc\">A {WIDTH} by {HEIGHT} animated Conway Game of Life grid "
-            f"started from the {escape(login)} mark and color-accented by GitHub contribution activity.</desc>"
+            f"started from the {escape(login)} mark and colored with GitHub-style contribution levels.</desc>"
         ),
         "<defs>",
-        (
-            '<filter id="soft-glow" x="-25%" y="-25%" width="150%" height="150%">'
-            f'<feDropShadow dx="0" dy="0" stdDeviation="2.1" flood-color="{theme["glow"]}" flood-opacity="0.55"/>'
-            "</filter>"
-        ),
         (
             '<pattern id="scanlines" width="6" height="6" patternUnits="userSpaceOnUse">'
             f'<path d="M0 0H6" stroke="{theme["scanline"]}" stroke-opacity="0.055"/>'
@@ -352,12 +370,12 @@ def make_svg(
             py = y0 + y * (cell + gap)
             count = counts[y][x]
             fill = cell_fill(theme, count, x, y, login)
-            values = ";".join("0.98" if state[y][x] else "0.08" for state in animation_states)
+            fill_values = ";".join(fill if state[y][x] else theme["level0"] for state in animation_states)
             lines.append(
                 f'<rect x="{px}" y="{py}" width="{cell}" height="{cell}" rx="2" '
-                f'fill="{fill}" opacity="{values.split(";")[0]}" filter="url(#soft-glow)">'
-                f'<animate attributeName="opacity" dur="{duration}" repeatCount="indefinite" '
-                f'values="{values}"/>'
+                f'fill="{fill_values.split(";")[0]}">'
+                f'<animate attributeName="fill" dur="{duration}" repeatCount="indefinite" '
+                f'values="{fill_values}"/>'
                 "</rect>"
             )
 
