@@ -20,6 +20,10 @@
     <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
   </picture>
   <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/Rust-111111?style=flat-square&logo=rust&logoColor=dea584&labelColor=050505">
+    <img src="https://img.shields.io/badge/Rust-000000?style=flat-square&logo=rust&logoColor=white" alt="Rust">
+  </picture>
+  <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/C%2FC%2B%2B-111111?style=flat-square&logo=cplusplus&logoColor=f5f25a&labelColor=050505">
     <img src="https://img.shields.io/badge/C%2FC%2B%2B-00599C?style=flat-square&logo=cplusplus&logoColor=white" alt="C/C++">
   </picture>
