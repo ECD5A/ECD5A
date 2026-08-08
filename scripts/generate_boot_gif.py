@@ -4,8 +4,10 @@
 The original 233-frame sequence is retained pixel-for-pixel.  On the first run
 the 720 px source is centered, without scaling, in the 920 px profile canvas;
 frame 0 is re-encoded once to paint opaque sidebars and frames 1..232 keep their
-original image data.  New frames reuse an embedded 8x16 IBM-VGA ASCII bitmap on
-the original 9x16 text grid and omit the NETSCAPE loop extension.
+original image data.  The continuation clears the completed boot log and uses
+the full canvas for a profile-only POST screen.  New frames reuse an embedded
+8x16 IBM-VGA ASCII bitmap on a 9x16 text grid and omit the NETSCAPE loop
+extension.
 """
 
 from __future__ import annotations
@@ -31,12 +33,19 @@ SOURCE_X = (OUTPUT_SIZE[0] - SOURCE_SIZE[0]) // 2
 CELL_WIDTH = 9
 CELL_HEIGHT = 16
 GLYPH_WIDTH = 8
-TEXT_COLUMNS = 80
-VALUE_COLUMN = 22
-OK_COLUMN = 66
+TEXT_COLUMNS = 96
+PROFILE_X = (OUTPUT_SIZE[0] - TEXT_COLUMNS * CELL_WIDTH) // 2
+VALUE_COLUMN = 24
+OK_COLUMN = 90
 OK_TEXT = "[ OK ]"
 TEXT_COLOR = (170, 170, 170)
+OK_COLOR = (169, 216, 169)
 BACKGROUND = (0, 0, 0)
+
+LOADING_ROW = 1
+MODULE_ROWS = (5, 8, 11, 14, 17)
+BOOT_ROW = 20
+READY_ROW = 23
 
 # ASCII 32..126 from the same IBM-VGA-style 8x16 raster family visible in
 # boot.gif.  Each decompressed byte is one eight-pixel glyph row (MSB first).
@@ -299,7 +308,7 @@ def load_font() -> dict[str, Image.Image]:
 
 
 def module_body(category: str, value: str) -> str:
-    dots = "." * (20 - len(category))
+    dots = "." * (VALUE_COLUMN - len(category) - 2)
     body = f"{category} {dots} {value}"
     if body.index(value) != VALUE_COLUMN:
         raise ValueError(f"value column drift in {body!r}")
@@ -315,23 +324,14 @@ def line_with_ok(body: str) -> str:
     return line
 
 
-def clean_near_black(frame: Image.Image) -> Image.Image:
-    rgb = frame.convert("RGB")
-    pixels = bytearray(rgb.tobytes())
-    for offset in range(0, len(pixels), 3):
-        red, green, blue = pixels[offset : offset + 3]
-        if red < 24 and green < 24 and blue < 48:
-            pixels[offset : offset + 3] = bytes(BACKGROUND)
-    return Image.frombytes("RGB", rgb.size, bytes(pixels))
-
-
 def draw_text(
     frame: Image.Image,
     font: dict[str, Image.Image],
     text: str,
     *,
     column: int = 0,
-    row: int = 24,
+    row: int,
+    color: tuple[int, int, int] = TEXT_COLOR,
 ) -> None:
     for index, character in enumerate(text):
         if character == " ":
@@ -340,32 +340,22 @@ def draw_text(
             glyph = font[character]
         except KeyError as exc:
             raise ValueError(f"character has no VGA glyph: {character!r}") from exc
-        x = SOURCE_X + (column + index) * CELL_WIDTH
+        x = PROFILE_X + (column + index) * CELL_WIDTH
         y = row * CELL_HEIGHT
-        ink = Image.new("RGB", glyph.size, TEXT_COLOR)
+        ink = Image.new("RGB", glyph.size, color)
         frame.paste(ink, (x, y), glyph)
-
-
-def scroll_row(frame: Image.Image) -> Image.Image:
-    scrolled = Image.new("RGB", OUTPUT_SIZE, BACKGROUND)
-    scrolled.paste(
-        frame.crop((0, CELL_HEIGHT, OUTPUT_SIZE[0], OUTPUT_SIZE[1])),
-        (0, 0),
-    )
-    return scrolled
 
 
 def make_continuation(source: Image.Image) -> tuple[list[Image.Image], list[int]]:
     source.seek(BASE_FRAME_COUNT - 1)
     base = source.convert("RGB")
-    if base.size == SOURCE_SIZE:
-        screen = Image.new("RGB", OUTPUT_SIZE, BACKGROUND)
-        screen.paste(base, (SOURCE_X, 0))
-    elif base.size == OUTPUT_SIZE:
-        screen = base.copy()
-    else:
+    if base.size not in (SOURCE_SIZE, OUTPUT_SIZE):
         raise ValueError(f"unsupported composited base size: {base.size}")
-    screen = clean_near_black(screen)
+
+    # The BIOS/DOS sequence has completed.  Clear it like a text-mode CLS so
+    # the profile owns the full terminal instead of being appended at the
+    # bottom of the old boot log.
+    screen = Image.new("RGB", OUTPUT_SIZE, BACKGROUND)
 
     font = load_font()
     frames: list[Image.Image] = []
@@ -375,40 +365,42 @@ def make_continuation(source: Image.Image) -> tuple[list[Image.Image], list[int]
         frames.append(screen.copy())
         durations.append(duration)
 
-    def add_status_line(body: str, body_ms: int = 180, ok_ms: int = 220) -> None:
-        nonlocal screen
+    def add_status_line(
+        body: str,
+        row: int,
+        body_ms: int = 200,
+        ok_ms: int = 260,
+    ) -> None:
         line_with_ok(body)
-        screen = scroll_row(screen)
-        draw_text(screen, font, body)
+        draw_text(screen, font, body, row=row)
         append_state(body_ms)
-        draw_text(screen, font, OK_TEXT, column=OK_COLUMN)
+        draw_text(
+            screen,
+            font,
+            OK_TEXT,
+            column=OK_COLUMN,
+            row=row,
+            color=OK_COLOR,
+        )
         append_state(ok_ms)
 
-    def add_blank(duration: int = 100) -> None:
-        nonlocal screen
-        screen = scroll_row(screen)
-        append_state(duration)
+    add_status_line("LOADING PROFILE", LOADING_ROW)
+    for row, (category, value) in zip(MODULE_ROWS, MODULES, strict=True):
+        add_status_line(module_body(category, value), row)
+    add_status_line("BOOT COMPLETE", BOOT_ROW)
 
-    add_status_line("LOADING PROFILE")
-    add_blank()
-    for category, value in MODULES:
-        add_status_line(module_body(category, value))
-    add_blank()
-    add_status_line("BOOT COMPLETE")
+    draw_text(screen, font, "READY_", row=READY_ROW)
+    append_state(240)
 
-    screen = scroll_row(screen)
-    draw_text(screen, font, "READY_")
-    append_state(220)
-
-    cursor_x = SOURCE_X + 5 * CELL_WIDTH
-    cursor_y = 24 * CELL_HEIGHT
+    cursor_x = PROFILE_X + 5 * CELL_WIDTH
+    cursor_y = READY_ROW * CELL_HEIGHT
     for blink_index in range(3):
         off = screen.copy()
         off.paste(BACKGROUND, (cursor_x, cursor_y, cursor_x + CELL_WIDTH, cursor_y + CELL_HEIGHT))
         screen = off
-        append_state(160)
-        draw_text(screen, font, "_", column=5)
-        append_state(5_000 if blink_index == 2 else 180)
+        append_state(180)
+        draw_text(screen, font, "_", column=5, row=READY_ROW)
+        append_state(5_000 if blink_index == 2 else 220)
 
     return frames, durations
 
@@ -470,10 +462,13 @@ def validate_output(
             if ImageChops.difference(expected, result.convert("RGB")).getbbox():
                 raise ValueError(f"base frame {index} changed visually")
 
-        result.seek(result.n_frames - 1)
-        final_frame = result.convert("RGB")
-        if ImageChops.difference(final_frame, continuation_frames[-1]).getbbox():
-            raise ValueError("encoded final frame differs from the rendered final state")
+        for offset, expected in enumerate(continuation_frames):
+            index = BASE_FRAME_COUNT + offset
+            result.seek(index)
+            if ImageChops.difference(expected, result.convert("RGB")).getbbox():
+                raise ValueError(
+                    f"continuation frame {index} differs from its rendered state"
+                )
 
     return expected_frames, total_duration
 
