@@ -45,6 +45,10 @@ BACKGROUND = (0, 0, 0)
 LOADING_ROW = 1
 MODULE_ROWS = (5, 8, 11, 14, 17)
 COLLABORATION_ROW = 20
+CTA_ROW = 23
+CTA_TEXT = "> LET'S BUILD SOMETHING REAL"
+TYPE_DELAY_MS = 60
+WORD_PAUSE_MS = 160
 
 # ASCII 32..126 from the same IBM-VGA-style 8x16 raster family visible in
 # boot.gif.  Each decompressed byte is one eight-pixel glyph row (MSB first).
@@ -387,13 +391,37 @@ def make_continuation(source: Image.Image) -> tuple[list[Image.Image], list[int]
     for row, (category, value) in zip(MODULE_ROWS, MODULES, strict=True):
         add_status_line(module_body(category, value), row)
 
-    collaboration_body = "COLLABORATION "
-    collaboration_body += "." * (OK_COLUMN - len(collaboration_body) - 1)
-    add_status_line(
-        collaboration_body,
-        COLLABORATION_ROW,
-        ok_ms=5_000,
-    )
+    add_status_line("COLLABORATION ........ OPEN", COLLABORATION_ROW)
+
+    if len(CTA_TEXT) + 1 > TEXT_COLUMNS:
+        raise ValueError(f"CTA does not fit the VGA grid: {CTA_TEXT!r}")
+    for column, character in enumerate(CTA_TEXT):
+        if character == " ":
+            continue
+        draw_text(screen, font, character, column=column, row=CTA_ROW)
+        duration = (
+            WORD_PAUSE_MS
+            if column + 1 < len(CTA_TEXT) and CTA_TEXT[column + 1] == " "
+            else TYPE_DELAY_MS
+        )
+        append_state(duration)
+
+    cursor_column = len(CTA_TEXT)
+    draw_text(screen, font, "_", column=cursor_column, row=CTA_ROW)
+    append_state(240)
+
+    cursor_x = PROFILE_X + cursor_column * CELL_WIDTH
+    cursor_y = CTA_ROW * CELL_HEIGHT
+    for blink_index in range(3):
+        off = screen.copy()
+        off.paste(
+            BACKGROUND,
+            (cursor_x, cursor_y, cursor_x + CELL_WIDTH, cursor_y + CELL_HEIGHT),
+        )
+        screen = off
+        append_state(180)
+        draw_text(screen, font, "_", column=cursor_column, row=CTA_ROW)
+        append_state(5_000 if blink_index == 2 else 220)
 
     return frames, durations
 
