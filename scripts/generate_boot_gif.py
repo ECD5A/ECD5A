@@ -44,8 +44,7 @@ BACKGROUND = (0, 0, 0)
 
 LOADING_ROW = 1
 MODULE_ROWS = (5, 8, 11, 14, 17)
-BOOT_ROW = 20
-READY_ROW = 23
+COLLABORATION_ROW = 20
 
 # ASCII 32..126 from the same IBM-VGA-style 8x16 raster family visible in
 # boot.gif.  Each decompressed byte is one eight-pixel glyph row (MSB first).
@@ -387,20 +386,14 @@ def make_continuation(source: Image.Image) -> tuple[list[Image.Image], list[int]
     add_status_line("LOADING PROFILE", LOADING_ROW)
     for row, (category, value) in zip(MODULE_ROWS, MODULES, strict=True):
         add_status_line(module_body(category, value), row)
-    add_status_line("BOOT COMPLETE", BOOT_ROW)
 
-    draw_text(screen, font, "READY_", row=READY_ROW)
-    append_state(240)
-
-    cursor_x = PROFILE_X + 5 * CELL_WIDTH
-    cursor_y = READY_ROW * CELL_HEIGHT
-    for blink_index in range(3):
-        off = screen.copy()
-        off.paste(BACKGROUND, (cursor_x, cursor_y, cursor_x + CELL_WIDTH, cursor_y + CELL_HEIGHT))
-        screen = off
-        append_state(180)
-        draw_text(screen, font, "_", column=5, row=READY_ROW)
-        append_state(5_000 if blink_index == 2 else 220)
+    collaboration_body = "COLLABORATION "
+    collaboration_body += "." * (OK_COLUMN - len(collaboration_body) - 1)
+    add_status_line(
+        collaboration_body,
+        COLLABORATION_ROW,
+        ok_ms=5_000,
+    )
 
     return frames, durations
 
