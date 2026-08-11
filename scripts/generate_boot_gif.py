@@ -2,10 +2,11 @@
 """Build the one-shot BIOS and VGA profile POST animation.
 
 The legacy asset contains three memory-counting passes and was widened from
-720 px to 920 px with empty sidebars.  The first run removes the two duplicate
-passes, restores the original 720x400 BIOS viewport, and renders the profile
-POST on the same 80-column VGA grid.  Re-running the generator is idempotent.
-The output deliberately omits the NETSCAPE loop extension.
+720 px to 920 px with oversized sidebars.  The first run removes the two
+duplicate passes, keeps the original 720x400 BIOS viewport inside restrained
+24 px dark gutters, and renders the profile POST on the same 80-column VGA
+grid.  Re-running the generator is idempotent.  The output deliberately omits
+the NETSCAPE loop extension.
 """
 
 from __future__ import annotations
@@ -30,7 +31,8 @@ BASE_DURATION_MS = 12_300
 SOURCE_SIZE = (720, 400)
 LEGACY_OUTPUT_SIZE = (920, 400)
 LEGACY_SOURCE_X = (LEGACY_OUTPUT_SIZE[0] - SOURCE_SIZE[0]) // 2
-OUTPUT_SIZE = SOURCE_SIZE
+SIDE_MARGIN = 24
+OUTPUT_SIZE = (SOURCE_SIZE[0] + 2 * SIDE_MARGIN, SOURCE_SIZE[1])
 
 CELL_WIDTH = 9
 CELL_HEIGHT = 16
@@ -227,7 +229,7 @@ def base_frame_indices(source: Image.Image) -> list[int]:
             *range(LEGACY_DUPLICATE_END, LEGACY_BASE_FRAME_COUNT),
         ]
 
-    if source.size == OUTPUT_SIZE:
+    if source.size in (SOURCE_SIZE, OUTPUT_SIZE):
         if source.n_frames < BASE_FRAME_COUNT:
             raise ValueError(
                 f"normalized source has {source.n_frames} frames; "
@@ -242,7 +244,7 @@ def normalized_base_frame(source: Image.Image, source_index: int) -> Image.Image
     source.seek(source_index)
     frame = source.convert("RGB")
     if source.size == LEGACY_OUTPUT_SIZE:
-        return frame.crop(
+        frame = frame.crop(
             (
                 LEGACY_SOURCE_X,
                 0,
@@ -250,7 +252,12 @@ def normalized_base_frame(source: Image.Image, source_index: int) -> Image.Image
                 SOURCE_SIZE[1],
             )
         )
-    return frame.copy()
+    elif source.size == OUTPUT_SIZE:
+        return frame.copy()
+
+    canvas = Image.new("RGB", OUTPUT_SIZE, BACKGROUND)
+    canvas.paste(frame, (SIDE_MARGIN, 0))
+    return canvas
 
 
 def build_base_stream(
