@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Extend the profile BIOS GIF with a one-shot VGA profile POST sequence.
+"""Build the one-shot BIOS and VGA profile POST animation.
 
-The original 233-frame sequence is retained pixel-for-pixel.  On the first run
-the 720 px source is centered, without scaling, in the 920 px profile canvas;
-frame 0 is re-encoded once to paint opaque sidebars and frames 1..232 keep their
-original image data.  The continuation clears the completed boot log and uses
-the full canvas for a profile-only POST screen.  New frames reuse an embedded
-8x16 IBM-VGA ASCII bitmap on a 9x16 text grid and omit the NETSCAPE loop
-extension.
+The legacy asset contains three memory-counting passes and was widened from
+720 px to 920 px with empty sidebars.  The first run removes the two duplicate
+passes, restores the original 720x400 BIOS viewport, and renders the profile
+POST on the same 80-column VGA grid.  Re-running the generator is idempotent.
+The output deliberately omits the NETSCAPE loop extension.
 """
 
 from __future__ import annotations
@@ -15,7 +13,6 @@ from __future__ import annotations
 import argparse
 import base64
 import io
-import struct
 import tempfile
 import zlib
 from dataclasses import dataclass
@@ -24,19 +21,24 @@ from pathlib import Path
 from PIL import Image, ImageChops
 
 
-BASE_FRAME_COUNT = 233
-BASE_DURATION_MS = 13_260
+LEGACY_BASE_FRAME_COUNT = 233
+LEGACY_DUPLICATE_START = 25
+LEGACY_DUPLICATE_END = 52
+LEGACY_SELECTED_FRAME_COUNT = 206
+BASE_FRAME_COUNT = 203
+BASE_DURATION_MS = 12_300
 SOURCE_SIZE = (720, 400)
-OUTPUT_SIZE = (920, 400)
-SOURCE_X = (OUTPUT_SIZE[0] - SOURCE_SIZE[0]) // 2
+LEGACY_OUTPUT_SIZE = (920, 400)
+LEGACY_SOURCE_X = (LEGACY_OUTPUT_SIZE[0] - SOURCE_SIZE[0]) // 2
+OUTPUT_SIZE = SOURCE_SIZE
 
 CELL_WIDTH = 9
 CELL_HEIGHT = 16
 GLYPH_WIDTH = 8
-TEXT_COLUMNS = 96
+TEXT_COLUMNS = 80
 PROFILE_X = (OUTPUT_SIZE[0] - TEXT_COLUMNS * CELL_WIDTH) // 2
-VALUE_COLUMN = 24
-OK_COLUMN = 90
+VALUE_COLUMN = 22
+OK_COLUMN = 74
 OK_TEXT = "[ OK ]"
 TEXT_COLOR = (170, 170, 170)
 OK_COLOR = (169, 216, 169)
@@ -162,37 +164,12 @@ def parse_gif(data: bytes) -> tuple[bytes, list[GifBlock], bytes]:
     raise ValueError("GIF trailer is missing")
 
 
-def logical_size(prefix: bytes) -> tuple[int, int]:
-    return struct.unpack_from("<HH", prefix, 6)
-
-
 def is_loop_extension(block: GifBlock) -> bool:
     return (
         block.kind == "extension"
         and block.label == 0xFF
         and b"NETSCAPE2.0" in block.raw
     )
-
-
-def patch_prefix(prefix: bytes, width: int) -> bytes:
-    patched = bytearray(prefix)
-    struct.pack_into("<H", patched, 6, width)
-    # Palette index 1 is black in the original global palette.
-    patched[11] = 1
-    return bytes(patched)
-
-
-def patch_image_left(raw: bytes, offset: int, target_width: int) -> bytes:
-    descriptor = bytearray(raw[:10])
-    left, top, width, height = struct.unpack_from("<HHHH", descriptor, 1)
-    new_left = left + offset
-    if new_left + width > target_width:
-        raise ValueError(
-            f"shifted GIF frame exceeds canvas: {(new_left, top, width, height)}"
-        )
-    struct.pack_into("<H", descriptor, 1, new_left)
-    return bytes(descriptor) + raw[10:]
-
 
 def encode_frames(frames: list[Image.Image], durations: list[int]) -> bytes:
     if not frames or len(frames) != len(durations):
@@ -237,58 +214,82 @@ def localized_frame_blocks(encoded: bytes) -> list[GifBlock]:
     return result
 
 
-def wide_first_frame(source: Image.Image) -> Image.Image:
-    source.seek(0)
-    frame = Image.new("RGB", OUTPUT_SIZE, BACKGROUND)
-    frame.paste(source.convert("RGB"), (SOURCE_X, 0))
-    return frame
+def base_frame_indices(source: Image.Image) -> list[int]:
+    """Select the normalized BIOS frames from a legacy or rebuilt asset."""
+    if source.size == LEGACY_OUTPUT_SIZE:
+        if source.n_frames < LEGACY_BASE_FRAME_COUNT:
+            raise ValueError(
+                f"legacy source has {source.n_frames} frames; "
+                f"need at least {LEGACY_BASE_FRAME_COUNT}"
+            )
+        return [
+            *range(LEGACY_DUPLICATE_START),
+            *range(LEGACY_DUPLICATE_END, LEGACY_BASE_FRAME_COUNT),
+        ]
+
+    if source.size == OUTPUT_SIZE:
+        if source.n_frames < BASE_FRAME_COUNT:
+            raise ValueError(
+                f"normalized source has {source.n_frames} frames; "
+                f"need at least {BASE_FRAME_COUNT}"
+            )
+        return list(range(BASE_FRAME_COUNT))
+
+    raise ValueError(f"unsupported source canvas: {source.size}")
 
 
-def build_base_stream(source_data: bytes, source: Image.Image) -> bytes:
-    """Return the first 233 source frames, widened once and without a trailer."""
-    prefix, blocks, _ = parse_gif(source_data)
-    width, height = logical_size(prefix)
-    if height != OUTPUT_SIZE[1] or width not in (SOURCE_SIZE[0], OUTPUT_SIZE[0]):
-        raise ValueError(f"unsupported source canvas: {(width, height)}")
-
-    widening = width == SOURCE_SIZE[0]
-    output = bytearray(patch_prefix(prefix, OUTPUT_SIZE[0]))
-    replacement: list[GifBlock] = []
-    if widening:
-        source.seek(0)
-        duration = source.info.get("duration", 100)
-        replacement = localized_frame_blocks(
-            encode_frames([wide_first_frame(source)], [duration])
+def normalized_base_frame(source: Image.Image, source_index: int) -> Image.Image:
+    source.seek(source_index)
+    frame = source.convert("RGB")
+    if source.size == LEGACY_OUTPUT_SIZE:
+        return frame.crop(
+            (
+                LEGACY_SOURCE_X,
+                0,
+                LEGACY_SOURCE_X + SOURCE_SIZE[0],
+                SOURCE_SIZE[1],
+            )
         )
+    return frame.copy()
 
-    frame_index = 0
-    for block in blocks:
-        if frame_index >= BASE_FRAME_COUNT:
-            break
-        if is_loop_extension(block):
-            continue
 
-        if block.kind == "extension":
-            # The first frame replacement brings its own GCE.
-            if widening and frame_index == 0 and block.label == 0xF9:
-                continue
-            output += block.raw
-            continue
+def build_base_stream(
+    source: Image.Image,
+) -> tuple[bytes, list[Image.Image], list[int]]:
+    """Return the normalized BIOS stream and its composited frame states."""
+    frames: list[Image.Image] = []
+    durations: list[int] = []
+    for source_index in base_frame_indices(source):
+        frames.append(normalized_base_frame(source, source_index))
+        source.seek(source_index)
+        durations.append(source.info.get("duration", 0))
 
-        if widening and frame_index == 0:
-            for replacement_block in replacement:
-                output += replacement_block.raw
-        elif widening:
-            output += patch_image_left(block.raw, SOURCE_X, OUTPUT_SIZE[0])
-        else:
-            output += block.raw
-        frame_index += 1
-
-    if frame_index != BASE_FRAME_COUNT:
+    if len(frames) != LEGACY_SELECTED_FRAME_COUNT and source.size == LEGACY_OUTPUT_SIZE:
         raise ValueError(
-            f"expected {BASE_FRAME_COUNT} base frames, found {frame_index}"
+            f"selected {len(frames)} legacy frames; "
+            f"expected {LEGACY_SELECTED_FRAME_COUNT}"
         )
-    return bytes(output)
+
+    encoded = encode_frames(frames, durations)
+    encoded_frames: list[Image.Image] = []
+    encoded_durations: list[int] = []
+    with Image.open(io.BytesIO(encoded)) as normalized:
+        if normalized.n_frames != BASE_FRAME_COUNT:
+            raise ValueError(
+                f"normalized base has {normalized.n_frames} frames; "
+                f"expected {BASE_FRAME_COUNT}"
+            )
+        for index in range(normalized.n_frames):
+            normalized.seek(index)
+            encoded_frames.append(normalized.convert("RGB").copy())
+            encoded_durations.append(normalized.info.get("duration", 0))
+
+    prefix, blocks, _ = parse_gif(encoded)
+    output = bytearray(prefix)
+    for block in blocks:
+        if not is_loop_extension(block):
+            output += block.raw
+    return bytes(output), encoded_frames, encoded_durations
 
 
 def load_font() -> dict[str, Image.Image]:
@@ -350,9 +351,8 @@ def draw_text(
 
 
 def make_continuation(source: Image.Image) -> tuple[list[Image.Image], list[int]]:
-    source.seek(BASE_FRAME_COUNT - 1)
-    base = source.convert("RGB")
-    if base.size not in (SOURCE_SIZE, OUTPUT_SIZE):
+    base = normalized_base_frame(source, base_frame_indices(source)[-1])
+    if base.size != OUTPUT_SIZE:
         raise ValueError(f"unsupported composited base size: {base.size}")
 
     # The BIOS/DOS sequence has completed.  Clear it like a text-mode CLS so
@@ -427,30 +427,17 @@ def make_continuation(source: Image.Image) -> tuple[list[Image.Image], list[int]
 
 
 def source_base_duration(source: Image.Image) -> int:
-    if source.n_frames < BASE_FRAME_COUNT:
-        raise ValueError(
-            f"source has {source.n_frames} frames; need at least {BASE_FRAME_COUNT}"
-        )
     total = 0
-    for index in range(BASE_FRAME_COUNT):
-        source.seek(index)
+    for source_index in base_frame_indices(source):
+        source.seek(source_index)
         total += source.info.get("duration", 0)
     return total
 
 
-def expected_base_frame(source: Image.Image, index: int) -> Image.Image:
-    source.seek(index)
-    source_frame = source.convert("RGB")
-    if source_frame.size == OUTPUT_SIZE:
-        return source_frame
-    frame = Image.new("RGB", OUTPUT_SIZE, BACKGROUND)
-    frame.paste(source_frame, (SOURCE_X, 0))
-    return frame
-
-
 def validate_output(
     path: Path,
-    source: Image.Image,
+    base_frames: list[Image.Image],
+    base_durations: list[int],
     continuation_frames: list[Image.Image],
     continuation_durations: list[int],
 ) -> tuple[int, int]:
@@ -460,7 +447,7 @@ def validate_output(
         if "loop" in result.info:
             raise ValueError(f"GIF still has loop metadata: {result.info['loop']}")
 
-        expected_frames = BASE_FRAME_COUNT + len(continuation_frames)
+        expected_frames = len(base_frames) + len(continuation_frames)
         if result.n_frames != expected_frames:
             raise ValueError(
                 f"wrong frame count: {result.n_frames}, expected {expected_frames}"
@@ -471,20 +458,19 @@ def validate_output(
             result.seek(index)
             total_duration += result.info.get("duration", 0)
 
-        expected_duration = BASE_DURATION_MS + sum(continuation_durations)
+        expected_duration = sum(base_durations) + sum(continuation_durations)
         if total_duration != expected_duration:
             raise ValueError(
                 f"wrong duration: {total_duration} ms, expected {expected_duration} ms"
             )
 
-        for index in range(BASE_FRAME_COUNT):
-            expected = expected_base_frame(source, index)
+        for index, expected in enumerate(base_frames):
             result.seek(index)
             if ImageChops.difference(expected, result.convert("RGB")).getbbox():
                 raise ValueError(f"base frame {index} changed visually")
 
         for offset, expected in enumerate(continuation_frames):
-            index = BASE_FRAME_COUNT + offset
+            index = len(base_frames) + offset
             result.seek(index)
             if ImageChops.difference(expected, result.convert("RGB")).getbbox():
                 raise ValueError(
@@ -506,7 +492,7 @@ def main() -> None:
                 f"base duration changed: {base_duration} ms, expected {BASE_DURATION_MS} ms"
             )
 
-        base_stream = build_base_stream(source_data, source)
+        base_stream, base_frames, base_durations = build_base_stream(source)
         continuation_frames, continuation_durations = make_continuation(source)
         continuation_data = encode_frames(continuation_frames, continuation_durations)
         continuation_blocks = localized_frame_blocks(continuation_data)
@@ -529,7 +515,8 @@ def main() -> None:
 
             frame_count, total_duration = validate_output(
                 temp_path,
-                source,
+                base_frames,
+                base_durations,
                 continuation_frames,
                 continuation_durations,
             )
