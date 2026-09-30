@@ -322,8 +322,9 @@ def make_svg(
     grid_height = HEIGHT * cell + (HEIGHT - 1) * gap
     svg_width = 960
     svg_height = 190
-    frame_x = 0.5
-    frame_width = svg_width - 1
+    frame_inset = 6
+    frame_width = svg_width - 2 * frame_inset
+    frame_height = svg_height - 2 * frame_inset
     x0 = (svg_width - grid_width) // 2
     y0 = 56
     duration = "30s"
@@ -347,10 +348,10 @@ def make_svg(
         "</defs>",
         f'<rect width="{svg_width}" height="{svg_height}" rx="8" fill="{theme["bg"]}"/>',
         (
-            f'<rect x="{frame_x}" y="12" width="{frame_width}" height="{svg_height - 24}" rx="8" '
+            f'<rect x="{frame_inset}" y="{frame_inset}" width="{frame_width}" height="{frame_height}" rx="8" '
             f'fill="{theme["panel"]}" stroke="{theme["border"]}" stroke-width="1"/>'
         ),
-        f'<rect x="{frame_x}" y="12" width="{frame_width}" height="{svg_height - 24}" rx="8" fill="url(#scanlines)"/>',
+        f'<rect x="{frame_inset}" y="{frame_inset}" width="{frame_width}" height="{frame_height}" rx="8" fill="url(#scanlines)"/>',
         (
             f'<text x="30" y="34" fill="{theme["muted"]}" '
             'font-family="ui-monospace, SFMono-Regular, Consolas, Liberation Mono, monospace" '
