@@ -4,7 +4,6 @@
 <defs>
 <pattern id="scanlines" width="6" height="6" patternUnits="userSpaceOnUse"><path d="M0 0H6" stroke="#1a1a1a" stroke-opacity="0.055"/></pattern>
 </defs>
-<rect width="960" height="190" rx="8" fill="#ffffff"/>
 <rect x="12" y="12" width="936" height="166" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
 <rect x="12" y="12" width="936" height="166" rx="8" fill="url(#scanlines)"/>
 <text x="30" y="34" fill="#57606a" font-family="ui-monospace, SFMono-Regular, Consolas, Liberation Mono, monospace" font-size="12">CONWAY LIFEGRID</text>

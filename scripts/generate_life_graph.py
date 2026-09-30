@@ -343,7 +343,6 @@ def make_svg(
             "</pattern>"
         ),
         "</defs>",
-        f'<rect width="{svg_width}" height="{svg_height}" rx="8" fill="{theme["bg"]}"/>',
         (
             f'<rect x="12" y="12" width="{svg_width - 24}" height="{svg_height - 24}" rx="8" '
             f'fill="{theme["panel"]}" stroke="{theme["border"]}" stroke-width="1"/>'
