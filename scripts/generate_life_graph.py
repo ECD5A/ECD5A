@@ -322,10 +322,6 @@ def make_svg(
     grid_height = HEIGHT * cell + (HEIGHT - 1) * gap
     svg_width = 960
     svg_height = 190
-    # Include the full panel stroke, but omit the transparent side gutters.
-    # The drawing coordinates and vertical spacing stay the same.
-    visible_width = svg_width - 24 + 1
-    viewport_x = (svg_width - visible_width) / 2
     x0 = (svg_width - grid_width) // 2
     y0 = 56
     duration = "30s"
@@ -333,8 +329,7 @@ def make_svg(
 
     lines = [
         '<svg xmlns="http://www.w3.org/2000/svg" '
-        f'width="{visible_width}" height="{svg_height}" '
-        f'viewBox="{viewport_x:g} 0 {visible_width} {svg_height}" '
+        f'width="{svg_width}" height="{svg_height}" viewBox="0 0 {svg_width} {svg_height}" '
         'role="img" aria-labelledby="title desc">',
         f"<title id=\"title\">{escape(title)}</title>",
         (
