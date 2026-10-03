@@ -322,6 +322,9 @@ def make_svg(
     grid_height = HEIGHT * cell + (HEIGHT - 1) * gap
     svg_width = 960
     svg_height = 190
+    # When both README images shrink below the BIOS width, fill the side gutters.
+    panel_outer_width = svg_width - 24 + 1
+    narrow_scale = svg_width / panel_outer_width
     x0 = (svg_width - grid_width) // 2
     y0 = 56
     duration = "30s"
@@ -343,6 +346,13 @@ def make_svg(
             "</pattern>"
         ),
         "</defs>",
+        "<style>",
+        "@media (max-width: 748px) {",
+        ".life-panel { transform-origin: 0 0; transform-box: view-box; "
+        f"transform: scaleX({narrow_scale:.12g}) translateX(-11.5px); }}",
+        "}",
+        "</style>",
+        '<g class="life-panel">',
         (
             f'<rect x="12" y="12" width="{svg_width - 24}" height="{svg_height - 24}" rx="8" '
             f'fill="{theme["panel"]}" stroke="{theme["border"]}" stroke-width="1"/>'
@@ -378,7 +388,7 @@ def make_svg(
                 "</rect>"
             )
 
-    lines.append("</svg>")
+    lines.extend(["</g>", "</svg>"])
 
     return "\n".join(lines)
 
